@@ -15,8 +15,9 @@ class AdminViolationsListView(generics.ListAPIView):
 
     def get_queryset(self):
         qs = Violation.objects.select_related(
-            'violation_type', 'vehicle', 'intersection', 'officer'
-        ).prefetch_related('evidence_files')
+            'violation_type', 'vehicle', 'vehicle__owner',
+            'intersection', 'officer', 'fine',
+        ).prefetch_related('evidence_files', 'disputes')
 
         for param, field in [
             ('status', 'status'), ('severity', 'severity'),
@@ -59,8 +60,9 @@ class AdminViolationDetailView(APIView):
     def get(self, request, pk):
         try:
             violation = Violation.objects.select_related(
-                'violation_type', 'vehicle', 'intersection', 'officer'
-            ).prefetch_related('evidence_files', 'status_history').get(pk=pk)
+                'violation_type', 'vehicle', 'vehicle__owner',
+                'intersection', 'officer', 'fine',
+            ).prefetch_related('evidence_files', 'status_history', 'disputes__decision', 'disputes__citizen').get(pk=pk)
         except Violation.DoesNotExist:
             return Response({'error': 'Not found.'}, status=404)
 

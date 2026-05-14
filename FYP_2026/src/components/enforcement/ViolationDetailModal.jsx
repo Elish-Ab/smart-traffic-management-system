@@ -266,62 +266,120 @@ function ActionsPanel({ violation, onStatusChange }) {
 // Dispute decision panel
 function DisputeDecidePanel({ dispute, violationId }) {
   const [reason, setReason] = useState('');
+  const [localStatus, setLocalStatus] = useState(dispute.status);
   const queryClient = useQueryClient();
 
   const mutation = useMutation({
     mutationFn: ({ decision }) => disputesApi.decide(dispute.id, decision, reason),
-    onSuccess: () => {
+    onSuccess: (_, { decision }) => {
+      const next = decision === 'APPROVE' ? 'APPROVED'
+        : decision === 'REJECT' ? 'REJECTED'
+        : 'UNDER_REVIEW';
+      setLocalStatus(next);
       queryClient.invalidateQueries({ queryKey: ['violation-detail', violationId] });
-      queryClient.invalidateQueries({ queryKey: ['admin-violations'] });
+      queryClient.invalidateQueries({ queryKey: ['adm-viol'] });
+      queryClient.invalidateQueries({ queryKey: ['adm-viol-count'] });
     },
   });
 
-  if (['APPROVED', 'REJECTED', 'WITHDRAWN'].includes(dispute.status)) {
+  const act = (decision) => mutation.mutate({ decision });
+
+  // Settled states — show result banner
+  if (['APPROVED', 'REJECTED', 'WITHDRAWN'].includes(localStatus)) {
     return (
-      <div className={`rounded-lg px-3 py-2 text-[11px] ${
-        dispute.status === 'APPROVED' ? 'bg-green-50 text-green-700 border border-green-200' :
-        dispute.status === 'REJECTED' ? 'bg-red-50 text-red-700 border border-red-200' :
-        'bg-gray-50 text-gray-500 border border-gray-200'
+      <div className={`rounded-lg px-3 py-2.5 text-[11px] border space-y-1 ${
+        localStatus === 'APPROVED' ? 'bg-green-50 text-green-800 border-green-200' :
+        localStatus === 'REJECTED' ? 'bg-red-50 text-red-800 border-red-200' :
+        'bg-gray-50 text-gray-600 border-gray-200'
       }`}>
-        <span className="font-semibold">Decision: {dispute.status}</span>
-        {dispute.decision && (
-          <span className="ml-2 text-[10px]">— {dispute.decision.reason || 'No reason provided'}</span>
+        <div className="flex items-center gap-1.5 font-semibold">
+          {localStatus === 'APPROVED' ? <CheckCircle className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
+          {localStatus === 'APPROVED' ? 'Approved — Violation Dismissed & Fine Waived'
+           : localStatus === 'REJECTED' ? 'Rejected'
+           : 'Withdrawn by citizen'}
+        </div>
+        {dispute.decision?.reason && (
+          <p className="text-[10px] opacity-80">Reason: {dispute.decision.reason}</p>
+        )}
+        {dispute.decision?.decided_by && (
+          <p className="text-[10px] opacity-60">by {dispute.decision.decided_by} · {fmtDate(dispute.decision.decided_at)}</p>
+        )}
+        {/* Allow re-opening as Under Review */}
+        {localStatus === 'REJECTED' && (
+          <button
+            onClick={() => act('UNDER_REVIEW')}
+            disabled={mutation.isPending}
+            className="mt-1 text-[10px] underline text-amber-700 hover:text-amber-900 disabled:opacity-50"
+          >
+            Send back to Under Review
+          </button>
         )}
       </div>
     );
   }
 
   return (
-    <div className="space-y-1.5 mt-2">
+    <div className="mt-2 rounded-lg border border-border bg-muted/10 p-3 space-y-2.5">
+      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Admin Decision</p>
+
+      {/* Reason textarea */}
       <textarea
         value={reason}
         onChange={e => setReason(e.target.value)}
-        placeholder="Decision reason / feedback for citizen…"
+        placeholder="Reason / feedback for the citizen (required for Reject)…"
         rows={2}
-        className="w-full text-[11px] rounded-lg border border-border bg-muted/20 px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-primary/40 placeholder:text-muted-foreground/60"
+        className="w-full text-[11px] rounded-lg border border-border bg-background px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-primary/40 placeholder:text-muted-foreground/60"
       />
-      <div className="flex gap-2">
+
+      {/* Action buttons */}
+      <div className="grid grid-cols-3 gap-1.5">
+        {/* Approve */}
         <button
           disabled={mutation.isPending}
-          onClick={() => mutation.mutate({ decision: 'APPROVE' })}
-          className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white text-[11px] font-semibold disabled:opacity-50"
+          onClick={() => act('APPROVE')}
+          className="flex flex-col items-center gap-1 px-2 py-2.5 rounded-lg bg-green-600 hover:bg-green-700 text-white text-[10px] font-semibold disabled:opacity-50 transition-colors"
         >
           {mutation.isPending && mutation.variables?.decision === 'APPROVE'
-            ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3 h-3" />}
-          Approve
+            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            : <CheckCircle className="w-3.5 h-3.5" />}
+          <span>Approve</span>
+          <span className="font-normal opacity-80 text-center leading-tight">Dismiss violation &amp; waive fine</span>
         </button>
+
+        {/* Under Review */}
+        <button
+          disabled={mutation.isPending || localStatus === 'UNDER_REVIEW'}
+          onClick={() => act('UNDER_REVIEW')}
+          className="flex flex-col items-center gap-1 px-2 py-2.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-semibold disabled:opacity-50 transition-colors"
+        >
+          {mutation.isPending && mutation.variables?.decision === 'UNDER_REVIEW'
+            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            : <Clock className="w-3.5 h-3.5" />}
+          <span>Set Review</span>
+          <span className="font-normal opacity-80 text-center leading-tight">Needs further investigation</span>
+        </button>
+
+        {/* Reject */}
         <button
           disabled={mutation.isPending}
-          onClick={() => mutation.mutate({ decision: 'REJECT' })}
-          className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg border border-red-300 text-red-600 hover:bg-red-50 text-[11px] font-semibold disabled:opacity-50"
+          onClick={() => act('REJECT')}
+          className="flex flex-col items-center gap-1 px-2 py-2.5 rounded-lg border border-red-300 text-red-700 hover:bg-red-50 text-[10px] font-semibold disabled:opacity-50 transition-colors"
         >
           {mutation.isPending && mutation.variables?.decision === 'REJECT'
-            ? <Loader2 className="w-3 h-3 animate-spin" /> : <XCircle className="w-3 h-3" />}
-          Reject
+            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            : <XCircle className="w-3.5 h-3.5" />}
+          <span>Reject</span>
+          <span className="font-normal text-red-500 text-center leading-tight">Violation stands</span>
         </button>
       </div>
+
       {mutation.isError && (
-        <p className="text-[10px] text-red-500">Failed: {mutation.error?.message}</p>
+        <p className="text-[10px] text-red-500 bg-red-50 rounded px-2 py-1">
+          Failed: {mutation.error?.response?.data?.error || mutation.error?.message}
+        </p>
+      )}
+      {mutation.isSuccess && (
+        <p className="text-[10px] text-green-600">Decision saved successfully.</p>
       )}
     </div>
   );

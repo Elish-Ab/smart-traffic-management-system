@@ -267,44 +267,71 @@ class AdminDisputeDecideView(APIView):
     def post(self, request, pk):
         from disputes.models import Dispute, DisputeDecision
         try:
-            dispute = Dispute.objects.get(pk=pk)
+            dispute = Dispute.objects.select_related('violation', 'citizen').get(pk=pk)
         except Dispute.DoesNotExist:
             return Response({'error': 'Dispute not found.'}, status=status.HTTP_404_NOT_FOUND)
 
         decision = request.data.get('decision')
-        if decision not in ('APPROVE', 'REJECT'):
-            return Response({'error': 'Invalid decision.'}, status=status.HTTP_400_BAD_REQUEST)
+        reason   = request.data.get('reason', '')
 
+        # ── Set Under Review (no permanent decision yet) ─────────────────
+        if decision == 'UNDER_REVIEW':
+            dispute.status = 'UNDER_REVIEW'
+            dispute.resolved_at = None
+            dispute.save(update_fields=['status', 'resolved_at'])
+            try:
+                from notifications.models import Notification
+                Notification.objects.create(
+                    user=dispute.citizen,
+                    title='Dispute Under Review',
+                    message='Your dispute is now under review by an administrator.',
+                    notification_type='DISPUTE_UPDATE',
+                )
+            except Exception:
+                pass
+            return Response({'status': dispute.status, 'message': 'Dispute set to under review.'})
+
+        if decision not in ('APPROVE', 'REJECT'):
+            return Response({'error': "decision must be APPROVE, REJECT, or UNDER_REVIEW."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        # ── Final decision ────────────────────────────────────────────────
         DisputeDecision.objects.update_or_create(
             dispute=dispute,
             defaults={
                 'decided_by': request.user,
                 'decision': decision,
-                'reason': request.data.get('reason', ''),
+                'reason': reason,
             }
         )
         dispute.status = 'APPROVED' if decision == 'APPROVE' else 'REJECTED'
         dispute.resolved_at = timezone.now()
         dispute.save()
 
-        # If approved, dismiss the violation
         if decision == 'APPROVE':
+            # Dismiss the violation
             dispute.violation.status = 'DISMISSED'
-            dispute.violation.save()
-            # Waive fine if exists
+            dispute.violation.save(update_fields=['status'])
+            # Waive fine
             from fines.models import Fine
             Fine.objects.filter(violation=dispute.violation).update(
                 status='WAIVED', waive_reason='Dispute approved by admin'
             )
 
-        # Notify citizen
-        from notifications.models import Notification
-        Notification.objects.create(
-            user=dispute.citizen,
-            title='Dispute Update',
-            message=f'Your dispute has been {"approved" if decision == "APPROVE" else "rejected"}.',
-            notification_type='DISPUTE_UPDATE',
-        )
+        try:
+            from notifications.models import Notification
+            Notification.objects.create(
+                user=dispute.citizen,
+                title='Dispute Decision',
+                message=(
+                    f'Your dispute has been approved — the violation has been dismissed.'
+                    if decision == 'APPROVE'
+                    else f'Your dispute has been rejected. Reason: {reason or "See admin notes."}'
+                ),
+                notification_type='DISPUTE_UPDATE',
+            )
+        except Exception:
+            pass
 
         return Response({'status': dispute.status, 'message': 'Decision recorded.'})
 

@@ -42,8 +42,12 @@ export const finesApi = {
 export const disputesApi = {
   list: (params) => apiClient.get('/admin/disputes/', { params }),
   detail: (id) => apiClient.get(`/admin/disputes/${id}/`),
-  decide: (id, decision, reason) =>
+  /** decision: 'APPROVE' | 'REJECT' | 'UNDER_REVIEW' */
+  decide: (id, decision, reason = '') =>
     apiClient.post(`/admin/disputes/${id}/decide/`, { decision, reason }),
+  approve:     (id, reason) => apiClient.post(`/admin/disputes/${id}/decide/`, { decision: 'APPROVE',       reason }),
+  reject:      (id, reason) => apiClient.post(`/admin/disputes/${id}/decide/`, { decision: 'REJECT',        reason }),
+  setReview:   (id, reason) => apiClient.post(`/admin/disputes/${id}/decide/`, { decision: 'UNDER_REVIEW',  reason }),
 };
 
 // ── Traffic Control (intersections + signal override) ────────────────────

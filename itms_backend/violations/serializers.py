@@ -40,6 +40,9 @@ class ViolationSerializer(serializers.ModelSerializer):
     plate_number = serializers.CharField(source='vehicle.plate_number', read_only=True)
     location_name = serializers.CharField(source='intersection.name', read_only=True, default=None)
     fine_amount = serializers.SerializerMethodField()
+    fine_status = serializers.SerializerMethodField()
+    dispute_status = serializers.SerializerMethodField()
+    dispute_count = serializers.SerializerMethodField()
     evidence = EvidenceSerializer(source='evidence_files', many=True, read_only=True)
     violation_type = ViolationTypeSerializer(read_only=True)
     officer_name = serializers.CharField(source='officer.full_name', read_only=True, default=None)
@@ -64,7 +67,9 @@ class ViolationSerializer(serializers.ModelSerializer):
             'plate_number', 'location_name', 'source', 'status', 'severity',
             'latitude', 'longitude', 'detected_speed', 'ai_confidence',
             'notes', 'driver_name', 'driver_license', 'vehicle_color',
-            'fine_amount', 'evidence', 'officer_name',
+            'fine_amount', 'fine_status',
+            'dispute_status', 'dispute_count',
+            'evidence', 'officer_name',
             'detected_at', 'created_at', 'updated_at',
             # vehicle registration
             'vehicle_make', 'vehicle_model', 'vehicle_year',
@@ -74,6 +79,11 @@ class ViolationSerializer(serializers.ModelSerializer):
         ]
 
     def get_fine_amount(self, obj):
+        # Use prefetched fine if available, then fall back to FineRule lookup
+        try:
+            return float(obj.fine.amount)
+        except Exception:
+            pass
         from fines.models import FineRule
         rule = FineRule.objects.filter(
             violation_type=obj.violation_type,
@@ -81,6 +91,20 @@ class ViolationSerializer(serializers.ModelSerializer):
             is_active=True
         ).order_by('-effective_from').first()
         return float(rule.amount) if rule else 0
+
+    def get_fine_status(self, obj):
+        try:
+            return obj.fine.status
+        except Exception:
+            return None
+
+    def get_dispute_status(self, obj):
+        # Works with prefetch_related('disputes') — no extra query
+        disputes = list(obj.disputes.all())
+        return disputes[0].status if disputes else None
+
+    def get_dispute_count(self, obj):
+        return len(list(obj.disputes.all()))
 
 
 class ViolationSummarySerializer(serializers.Serializer):
