@@ -8,7 +8,6 @@ import AdminDashboardPage from './admin/Dashboard';
 import LiveTrafficControl from './admin/LiveTrafficControl';
 import ViolationsCenter from './admin/ViolationsCenter';
 import EvidencePanel from './admin/EvidencePanel';
-import PunishmentSystem from './admin/PunishmentSystem';
 import Analytics from './admin/Analytics';
 import HotspotMap from './admin/HotspotMap';
 import Settings from './admin/Settings';
@@ -30,7 +29,6 @@ const ADMIN_ROUTES = {
   'live-traffic': LiveTrafficControl,
   'violations': ViolationsCenter,
   'evidence': EvidencePanel,
-  'punishment': PunishmentSystem,
   'analytics': Analytics,
   'hotspot': HotspotMap,
   'settings': Settings,

@@ -40,9 +40,25 @@ class ViolationSerializer(serializers.ModelSerializer):
     plate_number = serializers.CharField(source='vehicle.plate_number', read_only=True)
     location_name = serializers.CharField(source='intersection.name', read_only=True, default=None)
     fine_amount = serializers.SerializerMethodField()
+    fine_status = serializers.SerializerMethodField()
+    dispute_status = serializers.SerializerMethodField()
+    dispute_count = serializers.SerializerMethodField()
     evidence = EvidenceSerializer(source='evidence_files', many=True, read_only=True)
     violation_type = ViolationTypeSerializer(read_only=True)
     officer_name = serializers.CharField(source='officer.full_name', read_only=True, default=None)
+    # Vehicle registration info
+    vehicle_make = serializers.CharField(source='vehicle.make', read_only=True, default=None)
+    vehicle_model = serializers.CharField(source='vehicle.model', read_only=True, default=None)
+    vehicle_year = serializers.IntegerField(source='vehicle.year', read_only=True, default=None)
+    vehicle_reg_type = serializers.CharField(source='vehicle.vehicle_type', read_only=True, default=None)
+    vehicle_reg_color = serializers.CharField(source='vehicle.color', read_only=True, default=None)
+    registration_expiry = serializers.DateField(source='vehicle.registration_expiry', read_only=True, default=None)
+    # Vehicle owner (registered citizen)
+    owner_id = serializers.CharField(source='vehicle.owner.id', read_only=True, default=None)
+    owner_name = serializers.CharField(source='vehicle.owner.full_name', read_only=True, default=None)
+    owner_phone = serializers.CharField(source='vehicle.owner.phone_number', read_only=True, default=None)
+    owner_email = serializers.CharField(source='vehicle.owner.email', read_only=True, default=None)
+    owner_national_id = serializers.CharField(source='vehicle.owner.national_id', read_only=True, default=None)
 
     class Meta:
         model = Violation
@@ -51,11 +67,23 @@ class ViolationSerializer(serializers.ModelSerializer):
             'plate_number', 'location_name', 'source', 'status', 'severity',
             'latitude', 'longitude', 'detected_speed', 'ai_confidence',
             'notes', 'driver_name', 'driver_license', 'vehicle_color',
-            'fine_amount', 'evidence', 'officer_name',
+            'fine_amount', 'fine_status',
+            'dispute_status', 'dispute_count',
+            'evidence', 'officer_name',
             'detected_at', 'created_at', 'updated_at',
+            # vehicle registration
+            'vehicle_make', 'vehicle_model', 'vehicle_year',
+            'vehicle_reg_type', 'vehicle_reg_color', 'registration_expiry',
+            # owner
+            'owner_id', 'owner_name', 'owner_phone', 'owner_email', 'owner_national_id',
         ]
 
     def get_fine_amount(self, obj):
+        # Use prefetched fine if available, then fall back to FineRule lookup
+        try:
+            return float(obj.fine.amount)
+        except Exception:
+            pass
         from fines.models import FineRule
         rule = FineRule.objects.filter(
             violation_type=obj.violation_type,
@@ -63,6 +91,20 @@ class ViolationSerializer(serializers.ModelSerializer):
             is_active=True
         ).order_by('-effective_from').first()
         return float(rule.amount) if rule else 0
+
+    def get_fine_status(self, obj):
+        try:
+            return obj.fine.status
+        except Exception:
+            return None
+
+    def get_dispute_status(self, obj):
+        # Works with prefetch_related('disputes') — no extra query
+        disputes = list(obj.disputes.all())
+        return disputes[0].status if disputes else None
+
+    def get_dispute_count(self, obj):
+        return len(list(obj.disputes.all()))
 
 
 class ViolationSummarySerializer(serializers.Serializer):

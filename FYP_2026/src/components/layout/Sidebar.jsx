@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils';
 import { useSimulation } from '@/lib/SimulationContext';
 import { Badge } from '@/components/ui/badge';
 import {
-  LayoutDashboard, TrafficCone, AlertTriangle, Camera, DollarSign,
+  LayoutDashboard, TrafficCone, Camera, DollarSign,
   BarChart2, Map, Settings, HelpCircle, Brain, TrendingUp,
   RotateCcw, SlidersHorizontal, FlaskConical, ScrollText,
   GitCompare, Shield, Code2, Activity, ChevronRight, ShieldAlert
@@ -12,9 +12,8 @@ import {
 const ADMIN_ITEMS = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'live-traffic', label: 'Live Traffic Control', icon: TrafficCone },
-  { id: 'violations', label: 'Violations Center', icon: AlertTriangle },
+  { id: 'violations', label: 'Violations & Enforcement', icon: ShieldAlert },
   { id: 'evidence', label: 'Evidence Panel', icon: Camera },
-  { id: 'punishment', label: 'Violation & Enforcement', icon: ShieldAlert },
   { id: 'analytics', label: 'Analytics', icon: BarChart2 },
   { id: 'hotspot', label: 'Hotspot Map', icon: Map },
   { id: 'settings', label: 'Settings', icon: Settings },

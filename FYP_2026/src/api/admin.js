@@ -17,6 +17,12 @@ export const violationsApi = {
   list: (params) => apiClient.get('/admin/violations/', { params }),
   detail: (id) => apiClient.get(`/admin/violations/${id}/`),
   update: (id, data) => apiClient.patch(`/admin/violations/${id}/`, data),
+  confirm: (id, notes = '') =>
+    apiClient.patch(`/admin/violations/${id}/`, { status: 'CONFIRMED', admin_notes: notes }),
+  dismiss: (id, notes = '') =>
+    apiClient.patch(`/admin/violations/${id}/`, { status: 'DISMISSED', admin_notes: notes }),
+  underReview: (id, notes = '') =>
+    apiClient.patch(`/admin/violations/${id}/`, { status: 'UNDER_REVIEW', admin_notes: notes }),
   evidence: (params) => apiClient.get('/admin/evidence/', { params }),
   hotspotMap: (params) => apiClient.get('/admin/hotspot-map/', { params }),
 };
@@ -36,8 +42,12 @@ export const finesApi = {
 export const disputesApi = {
   list: (params) => apiClient.get('/admin/disputes/', { params }),
   detail: (id) => apiClient.get(`/admin/disputes/${id}/`),
-  decide: (id, decision, reason) =>
+  /** decision: 'APPROVE' | 'REJECT' | 'UNDER_REVIEW' */
+  decide: (id, decision, reason = '') =>
     apiClient.post(`/admin/disputes/${id}/decide/`, { decision, reason }),
+  approve:     (id, reason) => apiClient.post(`/admin/disputes/${id}/decide/`, { decision: 'APPROVE',       reason }),
+  reject:      (id, reason) => apiClient.post(`/admin/disputes/${id}/decide/`, { decision: 'REJECT',        reason }),
+  setReview:   (id, reason) => apiClient.post(`/admin/disputes/${id}/decide/`, { decision: 'UNDER_REVIEW',  reason }),
 };
 
 // ── Traffic Control (intersections + signal override) ────────────────────
